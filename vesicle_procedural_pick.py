@@ -40,8 +40,6 @@ def main(params):
 	with open(inModel, "r") as f:
 		vesicle_model = json.load(f)
 
-	#print(vesicle_model)
-
 	# For every mcg, generate a set of particle picks for every vesicle
 	print("Picking...")
 	all_radii_px = []
@@ -49,15 +47,13 @@ def main(params):
 	particle_offset = 0
 	counter = 1
 	for mcg in vesicle_model:
-		#if counter > 1:
-		#	break
 		if counter % 100 == 0:
 			print("\t"+str(counter)+" / "+str(len(vesicle_model.keys()))+" micrographs...")
 		counter += 1
 		for vesicle in vesicle_model[mcg]:
 			all_radii_px.append(vesicle_model[mcg][vesicle]["radius"])
 			# Generate a set of picks (and filter for edges)
-			new_picks, particle_offset = autopick(new_picks, box_size_px, add_dist_px, vesicle_model[mcg][vesicle]["center"][0], vesicle_model[mcg][vesicle]["center"][1], vesicle_model[mcg][vesicle]["radius"], set_overlap, mcg, vesicle_model[mcg][vesicle]["mcg_w"], vesicle_model[mcg][vesicle]["mcg_h"], particle_offset, vesicle)
+			new_picks, particle_offset = autopick(new_picks, box_size_px, add_dist_px, vesicle_model[mcg][vesicle]["center"][0], vesicle_model[mcg][vesicle]["center"][1], vesicle_model[mcg][vesicle]["radius"], set_overlap, mcg, vesicle_model[mcg][vesicle]["mcg_w"], vesicle_model[mcg][vesicle]["mcg_h"], particle_offset, vesicle, set_internal_pick)
 			mcg_h = vesicle_model[mcg][vesicle]["mcg_h"]
 			mcg_w = vesicle_model[mcg][vesicle]["mcg_w"]
 
@@ -95,8 +91,6 @@ def main(params):
 	for i in range(0, len(all_radii_px)):
 		all_radii_nm.append(px_size * all_radii_px[i] / 10)
 		all_diam_nm.append(2 * px_size * all_radii_px[i] / 10)
-	#print(all_radii_nm)
-	#print(px_size)
 	n, bins, patches = plt.hist(all_diam_nm, 30)
 	plt.xlabel("Vesicle diameter (nm)")
 	plt.ylabel("frequency")
@@ -244,7 +238,7 @@ def convert_to_cs(pick, w, h):
 	return(new_x, new_y, pick[2], pick[3], pick[4], pick[5], pick[6])
 
 
-def autopick(pick_dict, box_size_px, add_dist, x, y, r, user_overlap, in_mcg, mcg_w, mcg_h, particle_offset, vesicle):
+def autopick(pick_dict, box_size_px, add_dist, x, y, r, user_overlap, in_mcg, mcg_w, mcg_h, particle_offset, vesicle, set_internal_pick):
 	""" Given the effective radius, box_size, and overlap, figure out how to acheive the necessary overlap """
 	
 	# Distance from center of circle to center of pick, pre-calculations
@@ -282,6 +276,13 @@ def autopick(pick_dict, box_size_px, add_dist, x, y, r, user_overlap, in_mcg, mc
 		pick_dict[in_mcg] = []
 	for pick in filtered_picks:
 		pick_dict[in_mcg].append(pick)
+
+	# Recursion loop for internal templated picking
+	if set_internal_pick == True:
+		recursion_flag = False
+		if div > 3:
+			new_radius = r - (box_size_px * (1 - user_overlap))
+			new_picks, particle_offset = autopick(pick_dict, box_size_px, add_dist, x, y, new_radius, user_overlap, in_mcg, mcg_w, mcg_h, particle_offset, vesicle, set_internal_pick)
 
 	return pick_dict, particle_offset
 
